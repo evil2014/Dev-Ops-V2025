@@ -820,6 +820,3 @@ sudo apt install -y lynis
 sudo lynis audit system
 # Ver recomendaciones en /var/log/lynis.log
 ```
-
-
-Con esto tienes **teoría** (parámetros, internals, mejores prácticas) y **prácticas** para **todos** los subtemas **2.1.1** hasta **2.5.3**. ¡Listo para tu curso o autoestudio!
