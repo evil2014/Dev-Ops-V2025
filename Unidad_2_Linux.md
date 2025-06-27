@@ -142,52 +142,67 @@ sudo chmod u+s /usr/local/bin/elevado.sh
 /usr/local/bin/elevado.sh  # EUID=0 (root)
 ```
 
----
-
 ### 2.1.3 Gestión de procesos (`ps`, `top`, `kill`, `nice`, `renice`)
 
 #### Teoría
 
-| Comando  | Parámetro        | Descripción                                       |
-| -------- | ---------------- | ------------------------------------------------- |
-| `ps`     | `aux`            | Todos los procesos                                |
-|          | `-ef`            | Formato estándar UNIX                             |
-| `top`    | P                | Ordenar por %CPU                                  |
-|          | M                | Ordenar por %MEM                                  |
-|          | k                | Matar proceso (señal desde `top`)                 |
-| `kill`   | `<PID>`          | Envía SIGTERM (15)                                |
-|          | `-9 <PID>`       | Envía SIGKILL (9)                                 |
-| `nice`   | `-n <valor>`     | Valor -20 (alta prioridad) a +19 (baja prioridad) |
-| `renice` | `<valor> -p PID` | Cambiar nice value de proceso en ejecución        |
+| Comando  | Parámetro        | Descripción ampliada                                                                                                                                                                         |
+| -------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ps`     | `aux`            | Muestra **todos** los procesos en formato BSD: columnas típicas son **USER**, **PID**, **%CPU**, **%MEM**, **VSZ**, **RSS**, **STAT**, **START**, **TIME**, **COMMAND**. STAT indica estado. |
+|          | `-ef`            | Muestra todos los procesos en formato UNIX: columnas **UID**, **PID**, **PPID**, **C**, **STIME**, **TTY**, **TIME**, **CMD**. Útil para scripts y parseo programático.                      |
+| `top`    | *tecla* `P`      | Ordena dinámicamente la lista de procesos por **%CPU**, de mayor a menor.                                                                                                                    |
+|          | *tecla* `M`      | Ordena por **%MEM**, de mayor a menor.                                                                                                                                                       |
+|          | *tecla* `k`      | Permite introducir un **PID** y señal para matar un proceso directamente desde la interfaz.                                                                                                  |
+| `kill`   | `<PID>`          | Envía **SIGTERM** (15), petición de terminación “amable”. El proceso puede limpiar recursos antes de morir.                                                                                  |
+|          | `-9 <PID>`       | Envía **SIGKILL** (9), fuerza cierre inmediato, no puede atraparse ni limpiarse.                                                                                                             |
+| `nice`   | `-n <valor>`     | Lanza un comando con un valor de “niceness” entre **-20** (máxima prioridad) y **+19** (mínima). Controla su peso en la CPU.                                                                 |
+| `renice` | `<valor> -p PID` | Cambia el nice de un proceso en ejecución (necesita permisos si baja el valor).                                                                                                              |
 
-Linux scheduler (CFS) asigna slices basados en nice y políticas. Estados: **Running**, **Sleeping**, **Stopped**, **Zombie**.
+##### Scheduler CFS (Completely Fair Scheduler)
+
+* CFS asigna a cada proceso un **vruntime** proporcional a su nice y uso de CPU; trata de “compartir” el tiempo de CPU de forma justa.
+* Los procesos con menor nice (más prioridad) acumulan vruntime más despacio, accediendo antes a la CPU.
+* Internamente usa un **árbol rojo-negro** ordenado por vruntime para elegir al siguiente proceso.
+
+##### Estados de un proceso (`STAT` en `ps`)
+
+| Estado     | Código | Descripción                                                 |
+| ---------- | ------ | ----------------------------------------------------------- |
+| Running    | `R`    | Proceso ejecutándose o listo para ejecutarse                |
+| Sleeping   | `S`    | Interrumpible: espera un evento (I/O, temporizador, señal…) |
+| Disk Sleep | `D`    | No interrumpible: espera I/O de disco                       |
+| Stopped    | `T`    | Parado por señal o ptrace                                   |
+| Zombie     | `Z`    | Terminó pero su padre no ha leído su estado (defunct)       |
+
+---
 
 #### Prácticas
 
 ```bash
-# 1. Bucle infinito en background
+# 1. Bucle infinito en background para generar carga
 python3 -c "while True: pass" &
 
-# 2. Identificar PID
+# 2. Identificar su PID y estado
 ps aux | grep '[p]ython3'
 
-# 3. Terminar educadamente
+# 3. Terminar educadamente con SIGTERM
 kill <PID>
 
-# 4. Forzar término
+# 4. Forzar cierre con SIGKILL si no responde
 kill -9 <PID>
 
-# 5. Ver proceso ya eliminado
+# 5. Verificar que ya no aparece
 ps -ef | grep '[p]ython3'
 
-# 6. Lanzar proceso con baja prioridad
+# 6. Iniciar un proceso con baja prioridad (niceness +10)
 nice -n 10 yes > /dev/null &
 
-# 7. Monitorear en top (P para CPU, M para MEM)
+# 7. Monitorear en tiempo real con top
+#    - Presiona P para ordenar por CPU, M para memoria, k para matar procesos
 top
 ```
 
----
+
 
 ## 2.2 Monitoreo de jobs, servicios y sistemas
 
