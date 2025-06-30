@@ -204,65 +204,123 @@ top
 
 
 
-## 2.2 Monitoreo de jobs, servicios y sistemas
+
+---
 
 ### 2.2.1 Verificación de estado de servicios (`systemctl`, `service`)
 
-#### Teoría
+#### Teoría Básica
 
-Una **unidad** `.service` en `systemd` consta de:
+* **¿Qué es systemd?**
+  systemd es el sistema de inicialización (init) y gestor de servicios predominante en la mayoría de distribuciones Linux modernas. Se encarga de:
+
+  * Arrancar el sistema y sus servicios (daemons) en paralelo.
+  * Gestionar dependencias y orden de arranque.
+  * Supervisar procesos, reiniciarlos si fallan, y reunir sus logs.
+
+* **¿Qué es una unidad (.service)?**
+  Una unidad de tipo `service` describe cómo arrancar, parar y supervisar un demonio. Cada archivo `.service` es un contenedor de metadatos y acciones a ejecutar.
+
+* **Ubicación de archivos de servicio**
+
+  * `/usr/lib/systemd/system/` (servicios provistos por paquetes del sistema)
+  * `/etc/systemd/system/` (servicios administrados o personalizados)
+  * `/run/systemd/system/` (servicios generados en tiempo de ejecución)
+
+* **Listar servicios**
+
+  ```bash
+  # Todas las unidades service (cargadas en memoria)
+  systemctl list-units --type=service
+
+  # Todas las posibles unidades service (disponibles en disco)
+  systemctl list-unit-files --type=service
+
+  # Sólo las habilitadas (se iniciarán al arranque)
+  systemctl list-unit-files --type=service | grep enabled
+  ```
+
+* **Targets vs viejos runlevels**
+  systemd utiliza “targets” en lugar de runlevels SysV. Ejemplos:
+
+  * `multi-user.target` ≈ runlevel 3 (modo texto multiusuario)
+  * `graphical.target` ≈ runlevel 5 (modo texto + GUI)
+    Cambiar target:
+
+  ```bash
+  systemctl isolate multi-user.target
+  ```
+
+#### Teoría Avanzada
 
 ```ini
 [Unit]
-Description=...
+Description=…
 After=network.target
-Requires=...
+Requires=…
 
 [Service]
 Type=simple|forking|oneshot|notify
 ExecStart=/ruta/al/binario
-ExecStartPre=...
-ExecStartPost=...
+ExecStartPre=…
+ExecStartPost=…
 Restart=no|on-failure|always
 RestartSec=5
-User=...
-Group=...
-AmbientCapabilities=...
+User=…
+Group=…
+AmbientCapabilities=…
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-* **Type** define cuándo se considera “activo”.
-* Dependencias aseguran orden de arranque.
-* `systemctl isolate <target>` cambia runlevel.
+* **Type** define cuándo se considera activo:
+
+  * `simple`: arranca el proceso y asume que sigue vivo.
+  * `forking`: servicio tradicional que hace fork.
+  * `oneshot`: para scripts de configuración.
+  * `notify`: espera mensaje de “ready”.
+* **Dependencias**
+
+  * `After=` solo ordena; `Requires=` obliga.
+* **Depuración**
+
+  * `systemctl status foo.service` → estado + últimos logs.
+  * `systemctl show foo.service` → todas las propiedades.
+* **Límites de reinicio**
+
+  * `StartLimitBurst=`, `StartLimitIntervalSec=` controlan recargas.
+* **Drop-ins**
+
+  * `systemctl edit foo.service` crea `/etc/systemd/system/foo.service.d/override.conf` para anular parámetros sin tocar el original.
 
 #### Prácticas
 
 ```bash
-# Ver estado
+# Estado y control básico
 systemctl status sshd.service
 systemctl status cron.service
 
-# Control básico
 sudo systemctl stop sshd.service
 sudo systemctl start sshd.service
 sudo systemctl reload sshd.service
 sudo systemctl enable cron.service
 sudo systemctl disable cron.service
 
-# Crear servicio demo
+# Servicio demo completo
 sudo tee /usr/local/bin/mi_servicio.sh > /dev/null << 'EOF'
 #!/bin/bash
-echo "\$(date): OK" >> /var/log/mi_servicio.log
+echo "$(date): OK" >> /var/log/mi_servicio.log
 EOF
 sudo chmod +x /usr/local/bin/mi_servicio.sh
 
 sudo tee /etc/systemd/system/mi_servicio.service > /dev/null << 'EOF'
 [Unit]
 Description=Servicio demo
+After=network.target
 
 [Service]
+Type=simple
 ExecStart=/usr/local/bin/mi_servicio.sh
 Restart=always
 RestartSec=3
@@ -276,52 +334,8 @@ sudo systemctl daemon-reload
 sudo systemctl start mi_servicio.service
 sudo systemctl enable mi_servicio.service
 
-# Logs
-journalctl -u mi_servicio.service -o cat -f
-```
-
----
-
-### 2.2.2 Visualización y análisis de logs (`journalctl`, `tail`, `grep`)
-
-#### Teoría
-
-1. **Journal binario**
-
-   * Ubicación: `/var/log/journal/`.
-   * Niveles: `emerg(0)` → `debug(7)`.
-   * Filtros:
-
-     ```
-     journalctl -u nginx -p err --since "2025-06-20" --until "2025-06-25"
-     journalctl SYSLOG_IDENTIFIER=sshd _PID=1234
-     ```
-   * Salidas: `-o short`, `-o verbose`, `-o json`, `-o json-pretty`.
-
-2. **Logrotate**
-
-   * Configuraciones en `/etc/logrotate.d/`.
-   * Parámetros: `rotate`, `compress`, `delaycompress`, `postrotate`.
-
-3. **Logs textuales**
-
-   * Rutas comunes: `/var/log/syslog`, `/var/log/auth.log`, `/var/log/nginx/*.log`.
-   * Combinar `tail -f` + `grep --line-buffered`.
-
-#### Prácticas
-
-```bash
-# Journal
-journalctl -k -n 50
-journalctl -u sshd.service --since "today" -p warning
-journalctl -u cron.service -o json-pretty | jq '.[].MESSAGE'
-
-# Logs clásicos
-sudo tail -n 20 /var/log/auth.log
-sudo tail -f /var/log/auth.log | grep --line-buffered "Failed password"
-
-# Rotar manual
-sudo logrotate -f /etc/logrotate.d/nginx
+# Logs en tiempo real
+journalctl -u mi_servicio.service -f -o cat
 ```
 
 ---
