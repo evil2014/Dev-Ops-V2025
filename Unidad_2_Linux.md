@@ -525,30 +525,111 @@ journalctl -u reloj_demo.service -f
 
 ---
 
-## 2.4 Automatización de tareas con Shell scripting
 
-### 2.4.1 Creación de scripts básicos
+## **2.4 Automatización de tareas con Shell Scripting**
 
-#### Teoría
+### **2.4.1 Creación de Scripts Básicos**
 
-1. **Shebang**: indica intérprete (`#!/bin/bash`).
-2. **Variables** y **quoting**:
+#### **Teoría**
 
-   * `"..."` para expansiones,
-   * `'...'` para literales.
-   * `${VAR#pref}` / `${VAR%suf}` para manipulaciones.
-3. **Control de flujo**:
+**¿Qué es un script en Bash?**
+Un script es una serie de comandos escritos en un archivo de texto que puede ser ejecutado como un programa. El intérprete más común es Bash (`/bin/bash`), aunque existen otros como `sh`, `zsh`, etc.
 
-   * `if …; then …; elif …; else …; fi`
-   * `for i in …; do …; done`
-   * `while …; do …; done`
-4. **Parsing de opciones** con `getopts`.
+---
 
-#### Prácticas
+#### **Encabezado Shebang (`#!`)**
+
+La primera línea de un script suele ser:
 
 ```bash
-# Script de respaldo
-cat > ~/backup_home.sh << 'EOF'
+#!/bin/bash
+```
+
+Esto se llama *shebang* e indica qué intérprete ejecutar para procesar el script. Sin esto, el sistema puede no saber cómo ejecutarlo.
+
+---
+
+#### **Variables y quoting**
+
+* **Declaración de variables:**
+
+```bash
+NOMBRE="Eduardo"
+```
+
+* **Uso de variables con quoting:**
+
+```bash
+echo "$NOMBRE"     # Expande a Eduardo
+echo '$NOMBRE'     # Literal, imprime $NOMBRE
+```
+
+* **Manipulación de variables:**
+
+```bash
+ARCHIVO="reporte_final.txt"
+echo "${ARCHIVO%.txt}"    # Elimina sufijo .txt → "reporte_final"
+echo "${ARCHIVO#reporte_}" # Elimina prefijo "reporte_" → "final.txt"
+```
+
+---
+
+#### **Control de flujo**
+
+* **Condicional if-elif-else:**
+
+```bash
+if [ -f "$ARCHIVO" ]; then
+  echo "Existe el archivo"
+elif [ -d "$ARCHIVO" ]; then
+  echo "Es un directorio"
+else
+  echo "No existe"
+fi
+```
+
+* **Bucle for:**
+
+```bash
+for archivo in *.txt; do
+  echo "Procesando $archivo"
+done
+```
+
+* **Bucle while:**
+
+```bash
+contador=1
+while [ $contador -le 5 ]; do
+  echo "Iteración $contador"
+  ((contador++))
+done
+```
+
+---
+
+#### **Procesamiento de argumentos con `getopts`**
+
+Permite crear scripts que acepten opciones como `-f archivo`, `-o salida`:
+
+```bash
+while getopts ":f:o:h" opt; do
+  case $opt in
+    f) FILE="$OPTARG";;
+    o) OUT="$OPTARG";;
+    h) echo "Uso: -f archivo -o salida"; exit 0;;
+    \?) echo "Opción inválida: -$OPTARG"; exit 1;;
+  esac
+done
+```
+
+---
+
+### **Prácticas**
+
+**Script de respaldo (`backup_home.sh`):**
+
+```bash
 #!/bin/bash
 SHELL=/bin/bash
 ORIG="$HOME/documentos_importantes"
@@ -558,12 +639,18 @@ FILE="backup_$TS.tar.gz"
 mkdir -p "$DEST"
 tar -czf "$DEST/$FILE" -C "$ORIG" .
 echo "Respaldo generado en $DEST/$FILE"
-EOF
-chmod +x ~/backup_home.sh
-~/backup_home.sh
+```
 
-# Script de chequeo disco
-cat > ~/check_disk.sh << 'EOF'
+**Explicación:**
+
+* Crea un respaldo comprimido (`.tar.gz`) con timestamp.
+* Guarda en `~/respaldos`.
+
+---
+
+**Script de chequeo de disco (`check_disk.sh`):**
+
+```bash
 #!/bin/bash
 USO=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
 if [ "$USO" -ge 80 ]; then
@@ -572,12 +659,17 @@ if [ "$USO" -ge 80 ]; then
 else
   echo "Uso de /: $USO% (OK)"
 fi
-EOF
-chmod +x ~/check_disk.sh
-~/check_disk.sh
+```
 
-# Bucle con getopts
-cat > ~/parse_args.sh << 'EOF'
+**Explicación:**
+
+* Verifica si el disco raíz (`/`) está usando más del 80%.
+
+---
+
+**Script con `getopts` (`parse_args.sh`):**
+
+```bash
 #!/bin/bash
 while getopts ":f:o:h" opt; do
   case $opt in
@@ -588,46 +680,110 @@ while getopts ":f:o:h" opt; do
   esac
 done
 echo "Archivo: $FILE, Salida: $OUT"
-EOF
-chmod +x ~/parse_args.sh
-./parse_args.sh -f input.txt -o output.txt
+```
+
+**Uso:**
+
+```bash
+./parse_args.sh -f entrada.txt -o salida.txt
 ```
 
 ---
 
-### 2.4.2 Programación de tareas automáticas
+### **2.4.2 Programación de Tareas Automáticas**
 
-#### Teoría
+#### **Teoría**
 
-* **cron**: usa `/etc/crontab`, `/etc/cron.d/*`, `crontab -e`.
+**¿Qué es `cron`?**
+Herramienta para ejecutar comandos o scripts en horarios definidos. Cada usuario puede tener su propio archivo de configuración (crontab).
 
-  * Campos: `m h dom mon dow`.
-  * Entorno: `SHELL`, `PATH`, `MAILTO`.
-* **at**: ejecución puntual;
+**Sintaxis de cron:**
 
-  * Fechas: `at now + 2 hours`, `at 09:30 tomorrow`.
-  * `atq` lista, `atrm` borra.
+```
+m h dom mon dow comando
+```
 
-#### Prácticas
+* **m:** minuto (0-59)
+* **h:** hora (0-23)
+* **dom:** día del mes (1-31)
+* **mon:** mes (1-12)
+* **dow:** día de la semana (0-7, donde 0 y 7 son domingo)
+
+**Variables útiles:**
+
+* `SHELL=/bin/bash`: define el intérprete
+* `PATH=...`: define la ruta de ejecución
+* `MAILTO=usuario`: correo donde se envía la salida (si se configura)
+
+---
+
+**¿Qué es `at`?**
+Herramienta para programar tareas **únicas** en un momento futuro.
+
+**Comandos útiles:**
 
 ```bash
-# Cron diario
+at now + 2 hours
+at 09:30 tomorrow
+atq        # Ver cola de tareas
+atrm <job> # Eliminar tarea programada
+```
+
+---
+
+### **Prácticas**
+
+#### **Tarea diaria con `cron`:**
+
+```bash
 crontab -e
-# Añadir:
+```
+
+Agregar la siguiente línea para ejecutar respaldo todos los días a las 11:00 PM:
+
+```bash
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 0 23 * * * /home/usuario/backup_home.sh >> /home/usuario/backup.log 2>&1
+```
 
+Ver tareas:
+
+```bash
 crontab -l
-
-# Programar con at
-sudo systemctl start atd && sudo systemctl enable atd
-echo "/home/usuario/check_disk.sh >> ~/check.log" | at 09:30 tomorrow
-atq
-atrm <job>
 ```
 
 ---
+
+#### **Tarea puntual con `at`:**
+
+1. Asegúrate de que el demonio esté activo:
+
+```bash
+sudo systemctl start atd
+sudo systemctl enable atd
+```
+
+2. Programa una ejecución para mañana a las 9:30 AM:
+
+```bash
+echo "/home/usuario/check_disk.sh >> ~/check.log" | at 09:30 tomorrow
+```
+
+3. Ver tareas pendientes:
+
+```bash
+atq
+```
+
+4. Eliminar tarea con ID 5 (por ejemplo):
+
+```bash
+atrm 5
+```
+
+---
+
 
 ### 2.4.3 Ejecución y depuración de scripts
 
