@@ -837,72 +837,197 @@ chmod +x ~/test_ping.sh
 ~/test_ping.sh
 ```
 
----
 
 ## 2.5 Seguridad en Linux
 
-### 2.5.1 Gestión de tablas de ruteo y configuración de firewall (`iptables`, `firewalld`, `nftables`)
+### 2.5.1 Gestión de tablas de ruteo y configuración de firewall (iptables, firewalld, nftables)
+
+**Distribuciones foco: Ubuntu (Debian-based) y Fedora (Red Hat-based)**
+
+---
+
+### Fundamentos Generales
+
+Linux incluye mecanismos de seguridad a nivel de red mediante dos herramientas principales:
+
+1. **Tablas de ruteo**: determinan cómo el sistema dirige paquetes a redes externas.
+2. **Firewall (Netfilter)**: permite aceptar, rechazar o modificar tráfico según reglas.
+
+El kernel de Linux implementa Netfilter como sistema de filtrado de paquetes. Las herramientas de configuración disponibles en las distribuciones más comunes son:
+
+* **iptables**: tradicional, aún usada ampliamente.
+* **nftables**: sucesor moderno de iptables.
+* **firewalld**: interfaz de alto nivel, usada por defecto en Fedora y opcional en Ubuntu.
+
+---
+
+### Gestión de Tablas de Ruteo
 
 #### Teoría
 
-* **NETFILTER** en el kernel:
+La tabla de ruteo define las rutas que siguen los paquetes para llegar a diferentes redes. Los paquetes se enrutan basándose en la dirección de destino y las rutas disponibles.
 
-  * Tablas: `filter`, `nat`, `mangle`, `raw`.
-  * Cadenas: `PREROUTING`, `INPUT`, `FORWARD`, `OUTPUT`, `POSTROUTING`.
-* **iptables**
+#### Comandos
 
-  ```
-  iptables -P INPUT DROP      # política por defecto
-  iptables -A INPUT -p tcp --dport 22 \
-      -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-  iptables -L -v
-  ```
-* **nftables** (nuevo sucesor):
+Agregar una ruta:
 
-  ```bash
-  nft add table ip filter
-  nft 'add chain ip filter input { type filter hook input priority 0; }'
-  nft add rule ip filter input tcp dport ssh ct state new,established accept
-  ```
-* **firewalld**
+```bash
+sudo ip route add 10.10.10.0/24 via 192.168.1.1 dev eth0
+```
 
-  ```
-  firewall-cmd --get-active-zones
-  firewall-cmd --zone=public --add-service=http --permanent
-  firewall-cmd --reload
-  firewall-cmd --query-service=http
-  ```
+Ver tabla de ruteo:
+
+```bash
+ip route show
+```
+
+Eliminar una ruta:
+
+```bash
+sudo ip route del 10.10.10.0/24
+```
+
+Este enfoque es común para ambas distribuciones.
+
+---
+
+### iptables (sistema tradicional)
+
+#### Teoría
+
+`iptables` opera sobre Netfilter, estableciendo reglas para filtrar paquetes según IP, puerto, estado de conexión, etc.
 
 #### Prácticas
 
+Borrar reglas existentes:
+
 ```bash
-# Ruteo
-sudo ip route add 10.10.10.0/24 via 192.168.1.1 dev eth0
-ip route show | grep 10.10.10.0
-sudo ip route del 10.10.10.0/24
-
-# iptables
 sudo iptables -F
-sudo iptables -P INPUT DROP
-sudo iptables -A INPUT -p tcp --dport 22 \
-    -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A INPUT -m conntrack \
-    --ctstate ESTABLISHED,RELATED -j ACCEPT
-sudo iptables -L -v
-
-# nftables
-sudo nft add table ip filter
-sudo nft 'add chain ip filter input { type filter hook input priority 0; }'
-sudo nft add rule ip filter input tcp dport 22 ct state new,established accept
-
-# firewalld
-sudo systemctl start firewalld
-sudo firewall-cmd --zone=public --add-service=http --permanent
-sudo firewall-cmd --reload
-sudo firewall-cmd --query-service=http
 ```
 
+Establecer política por defecto:
+
+```bash
+sudo iptables -P INPUT DROP
+```
+
+Permitir SSH (puerto 22):
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+```
+
+Ver reglas actuales:
+
+```bash
+sudo iptables -L -v
+```
+
+**Ubuntu** suele venir con `iptables` preinstalado.
+**Fedora** puede usar `iptables-services` si se instala explícitamente (`sudo dnf install iptables-services`).
+
 ---
+
+### nftables (reemplazo moderno)
+
+#### Teoría
+
+`nftables` unifica la administración de reglas IPv4/IPv6 y mejora el rendimiento. Es el sistema por defecto en **Fedora** desde hace varias versiones, y está disponible en **Ubuntu 20.04+**.
+
+#### Prácticas
+
+Crear tabla y cadena:
+
+```bash
+sudo nft add table ip filter
+sudo nft 'add chain ip filter input { type filter hook input priority 0; policy drop; }'
+```
+
+Agregar regla para SSH:
+
+```bash
+sudo nft add rule ip filter input tcp dport 22 ct state new,established accept
+```
+
+Ver reglas:
+
+```bash
+sudo nft list ruleset
+```
+
+**Ubuntu**:
+
+```bash
+sudo apt install nftables
+```
+
+**Fedora**:
+Ya viene preinstalado. Se administra con `systemctl enable --now nftables`.
+
+---
+
+### firewalld (interfaz simplificada)
+
+#### Teoría
+
+`firewalld` permite configurar reglas usando zonas (niveles de confianza para interfaces de red). Es la opción por defecto en Fedora y puede instalarse en Ubuntu.
+
+#### Prácticas
+
+Iniciar el servicio:
+
+```bash
+sudo systemctl start firewalld
+```
+
+Ver zonas activas:
+
+```bash
+firewall-cmd --get-active-zones
+```
+
+Agregar servicio HTTP permanentemente:
+
+```bash
+sudo firewall-cmd --zone=public --add-service=http --permanent
+sudo firewall-cmd --reload
+```
+
+Verificar si el servicio está habilitado:
+
+```bash
+firewall-cmd --query-service=http
+```
+
+**Ubuntu**:
+
+```bash
+sudo apt install firewalld
+```
+
+**Fedora**:
+Ya viene incluido y activo por defecto.
+
+---
+
+### Comparación por distribución
+
+| Característica       | Ubuntu                                | Fedora                         |
+| -------------------- | ------------------------------------- | ------------------------------ |
+| Firewall por defecto | UFW (puede usarse firewalld/nftables) | firewalld con nftables         |
+| Soporte iptables     | Sí (deprecado en nuevas versiones)    | Sí, pero no recomendado        |
+| nftables             | Desde 20.04                           | Predeterminado desde Fedora 31 |
+| firewalld            | Opcional                              | Predeterminado                 |
+
+---
+
+### Recomendaciones
+
+* En **Ubuntu**, considera usar `nftables` o `firewalld` en lugar de `iptables`.
+* En **Fedora**, usa `firewalld` como interfaz de alto nivel, o `nftables` directamente para control fino.
+* Para automatización o scripting, `nftables` ofrece mayor coherencia y flexibilidad.
+
 
 ### 2.5.2 Configuración de puertos y servicios seguros (SSH, HTTPS)
 
