@@ -70,7 +70,7 @@
 * 2015+: OCI (Open Container Initiative) normaliza formato de imagen y runtime.
 * 2014-2016: Nace Kubernetes (Google → CNCF) para orquestar contenedores a escala.
 
-Apunte docente: Relaciona cada hito con un problema de la época: aislamiento, densidad, portabilidad, escalamiento.
+ Relaciona cada hito con un problema de la época: aislamiento, densidad, portabilidad, escalamiento.
 
 Actividad rápida de discusión en clase: ¿Por qué Docker explotó en adopción frente a LXC directo?
 
