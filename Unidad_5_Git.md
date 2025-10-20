@@ -130,7 +130,7 @@ Una **rama** es una línea de desarrollo aislada. Permite experimentar sin afect
 Un **merge** integra el historial de una rama a otra. Si los cambios son compatibles, la fusión es automática; si no, Git pedirá resolver conflictos.
 
 ```bash
-git switch main
+git switch main #cambiar de rama otro forma 
 git merge rama-nueva
 ```
 
